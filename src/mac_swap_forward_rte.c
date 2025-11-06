@@ -70,40 +70,57 @@ lcore_forward_mac_swap(void *arg)
 static int
 setup_rte_flow(uint16_t port_id)
 {
-    struct rte_flow_attr attr = {0};
-    struct rte_flow_item pattern[2];
+    uint8_t proto_byte = 0xFD;
+    uint8_t proto_mask = 0xFF;
     struct rte_flow_item_raw raw_spec;
+    struct rte_flow_item_raw raw_mask;
+    struct rte_flow_attr attr;
+    struct rte_flow_item pattern[2];
     struct rte_flow_action action[2];
     struct rte_flow_action_queue queue = { .index = RX_QUEUE_ID };
     struct rte_flow_error error;
     struct rte_flow *flow;
+    struct rte_flow_action_port_id port_id_action;
 
+    /* Match in RX */
+    memset(&attr, 0, sizeof(attr));
     attr.ingress = 1;
 
-    memset(pattern, 0, sizeof(pattern));
+    /* RAW: search for 0xFD in byte 23 */
     memset(&raw_spec, 0, sizeof(raw_spec));
-    memset(action, 0, sizeof(action));
+    raw_spec.length   = 1;     /* 1 byte */
+    raw_spec.offset   = 23;    /* Protocol position in IPv4 header */
+    raw_spec.relative = 0;     /* start from byte 0*/
+    raw_spec.pattern  = &proto_byte;
 
-    raw_spec.pattern   = NULL;
-    raw_spec.length    = 0;
-    raw_spec.offset    = 0;
-    raw_spec.relative  = 0;
-    raw_spec.search    = 0;
-    raw_spec.limit     = 0;
+    memset(&raw_mask, 0, sizeof(raw_spec));
+    raw_mask.relative = 0;
+    raw_mask.search = 0;
+    raw_mask.offset = 23;
+    raw_mask.length = 1;
+    raw_mask.pattern = &proto_mask;
+
+    memset(pattern, 0, sizeof(pattern));
 
     pattern[0].type = RTE_FLOW_ITEM_TYPE_RAW;
     pattern[0].spec = &raw_spec;
-    pattern[0].mask = NULL;
+    pattern[0].mask = &raw_mask;
     pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
 
-    action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
-    action[0].conf = &queue;
+    memset(&port_id_action, 0, sizeof(port_id_action));
+    port_id_action.id = port_id;
+
+    /* Action: send to port_id */
+    memset(action, 0, sizeof(action));
+    action[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
+    action[0].conf = &port_id_action;
     action[1].type = RTE_FLOW_ACTION_TYPE_END;
 
+    /* Create flow */
     flow = rte_flow_create(port_id, &attr, pattern, action, &error);
     if (!flow) {
-        fprintf(stderr, "Failed to create RAW flow: %s\n",
-                error.message ? error.message : "(no message)");
+        printf("Failed to create flow: %s\n",
+            error.message ? error.message : "(no message)");
         return -1;
     }
 
