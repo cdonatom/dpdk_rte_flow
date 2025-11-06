@@ -70,8 +70,7 @@ lcore_forward_mac_swap(void *arg)
 static int
 setup_rte_flow(uint16_t port_id)
 {
-    uint8_t proto_byte = 0xFD;
-    uint8_t proto_mask = 0xFF;
+
     struct rte_flow_item_raw raw_spec;
     struct rte_flow_item_raw raw_mask;
     struct rte_flow_attr attr;
@@ -88,20 +87,19 @@ setup_rte_flow(uint16_t port_id)
 
     /* RAW: search for 0xFD in byte 23 */
     memset(&raw_spec, 0, sizeof(raw_spec));
-    raw_spec.length   = 1;     /* 1 byte */
+    raw_spec.pattern  = (const uint8_t*)"fd";
+    raw_spec.length   = strlen((const char*)raw_spec.pattern);     /* 1 byte */
     raw_spec.offset   = 23;    /* Protocol position in IPv4 header */
     raw_spec.relative = 0;     /* start from byte 0*/
-    raw_spec.pattern  = &proto_byte;
-
+    
     memset(&raw_mask, 0, sizeof(raw_spec));
+    raw_mask.pattern = (const uint8_t*)"ff";
+    raw_mask.length = strlen((const char*)raw_mask.pattern);
     raw_mask.relative = 0;
     raw_mask.search = 0;
-    raw_mask.offset = 23;
-    raw_mask.length = 1;
-    raw_mask.pattern = &proto_mask;
+    raw_mask.offset = 23;   
 
     memset(pattern, 0, sizeof(pattern));
-
     pattern[0].type = RTE_FLOW_ITEM_TYPE_RAW;
     pattern[0].spec = &raw_spec;
     pattern[0].mask = &raw_mask;
