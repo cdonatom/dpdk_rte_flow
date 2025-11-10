@@ -70,6 +70,9 @@ lcore_forward_mac_swap(void *arg)
 static int
 setup_rte_flow(uint16_t port_id)
 {
+    /* Define the pattern and mask as proper byte arrays */
+    static uint8_t pattern_bytes[] = { 0xFD };
+    static uint8_t mask_bytes[] = { 0xFF };
 
     struct rte_flow_item_raw raw_spec;
     struct rte_flow_item_raw raw_mask;
@@ -79,7 +82,6 @@ setup_rte_flow(uint16_t port_id)
     struct rte_flow_action_queue queue = { .index = RX_QUEUE_ID };
     struct rte_flow_error error;
     struct rte_flow *flow;
-    struct rte_flow_action_port_id port_id_action;
 
     /* Match in RX */
     memset(&attr, 0, sizeof(attr));
@@ -87,17 +89,16 @@ setup_rte_flow(uint16_t port_id)
 
     /* RAW: search for 0xFD in byte 23 */
     memset(&raw_spec, 0, sizeof(raw_spec));
-    raw_spec.pattern  = (const uint8_t*)"fd";
-    raw_spec.length   = strlen((const char*)raw_spec.pattern);     /* 1 byte */
-    raw_spec.offset   = 23;    /* Protocol position in IPv4 header */
-    raw_spec.relative = 0;     /* start from byte 0*/
-    
-    memset(&raw_mask, 0, sizeof(raw_spec));
-    raw_mask.pattern = (const uint8_t*)"ff";
-    raw_mask.length = strlen((const char*)raw_mask.pattern);
+    raw_spec.pattern  = pattern_bytes; /* Use the byte array */
+    raw_spec.length   = 1;             /* Length is 1 byte */
+    raw_spec.offset   = 23;            /* Protocol position in IPv4 header */
+    raw_spec.relative = 0;             /* Start from packet offset 0 */
+
+    memset(&raw_mask, 0, sizeof(raw_mask));
+    raw_mask.pattern  = mask_bytes;    /* Use the byte array */
+    raw_mask.length   = 1;             /* Length is 1 byte */
+    raw_mask.offset   = 23;            /* Match at the same offset */
     raw_mask.relative = 0;
-    raw_mask.search = 0;
-    raw_mask.offset = 23;   
 
     memset(pattern, 0, sizeof(pattern));
     pattern[0].type = RTE_FLOW_ITEM_TYPE_RAW;
@@ -105,13 +106,13 @@ setup_rte_flow(uint16_t port_id)
     pattern[0].mask = &raw_mask;
     pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
 
-    memset(&port_id_action, 0, sizeof(port_id_action));
-    port_id_action.id = port_id;
 
-    /* Action: send to port_id */
+    /*
+     * Action: send to queue (RX_QUEUE_ID)
+     */
     memset(action, 0, sizeof(action));
-    action[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
-    action[0].conf = &port_id_action;
+    action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE; /* Correct action */
+    action[0].conf = &queue;                     /* Point to queue config */
     action[1].type = RTE_FLOW_ACTION_TYPE_END;
 
     /* Create flow */
@@ -174,7 +175,7 @@ int main(int argc, char **argv)
     if (setup_rte_flow(port_id) < 0)
         rte_exit(EXIT_FAILURE, "Failed to setup RAW rte_flow\n");
 
-    /* Launch a single worker and master waits */ 
+    /* Launch a single worker and master waits */
     unsigned worker_lcore = rte_get_next_lcore(rte_lcore_id(), 1, 0);
     if (worker_lcore == RTE_MAX_LCORE)
         lcore_forward_mac_swap((void *)(uintptr_t)port_id);
