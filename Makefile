@@ -3,23 +3,24 @@
 # Default values
 IMAGE_NAME ?= dpdk-rte-flow
 VERSION ?= v4.20
+BASE_IMAGE ?= registry.redhat.io/openshift4/dpdk-base-rhel9:$(VERSION)
 DEBUG ?= false
 REGISTRY ?= quay.io/cdonato
 
 # Build the container with debug mode (default)
 .PHONY: build
 build:
-	podman build --build-arg DEBUG=$(DEBUG) -t $(IMAGE_NAME):$(VERSION) .
+	podman build --build-arg DEBUG=$(DEBUG) --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME):$(VERSION) .
 
 # Build the container with debug mode enabled
 .PHONY: build-debug
 build-debug:
-	podman build --build-arg DEBUG=true -t $(IMAGE_NAME):$(VERSION)-debug .
+	podman build --build-arg DEBUG=true --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME):$(VERSION)-debug .
 
 # Build the container without debug mode (release)
 .PHONY: build-release
 build-release:
-	podman build --build-arg DEBUG=false -t $(IMAGE_NAME):$(VERSION) .
+	podman build --build-arg DEBUG=false --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME):$(VERSION) .
 
 .PHONY: push
 push:
@@ -41,7 +42,8 @@ help:
 	@echo "  build          - Build container with DEBUG=$(DEBUG) (default: true)"
 	@echo "  build-debug    - Build container with debug mode enabled"
 	@echo "  build-release  - Build container without debug mode"
-	@echo "  run            - Run the container"
+	@echo "  push           - Push the container image to the registry"
+	@echo "  push-debug     - Push the container image with debug mode to the registry"
 	@echo "  clean          - Remove the container image"
 	@echo "  help           - Show this help message"
 	@echo ""

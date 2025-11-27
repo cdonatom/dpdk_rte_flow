@@ -1,6 +1,8 @@
-FROM registry.redhat.io/openshift4/dpdk-base-rhel9:v4.20
+ARG BASE_IMAGE=registry.redhat.io/openshift4/dpdk-base-rhel9:v4.20
+FROM ${BASE_IMAGE}
 
 ARG DEBUG=true
+ENV DEBUG=${DEBUG}
 
 USER root
 
@@ -18,7 +20,14 @@ USER default
 WORKDIR /opt/app-root/src
 COPY src/mac_swap_forward_rte.c .
 
-RUN gcc mac_swap_forward_rte.c -g -o mac_swap_forward_rte \
+RUN if [ "$DEBUG" = "true" ]; then \
+        echo "Building with debug symbols"; \
+        DEBUG_FLAGS="-g"; \
+    else \
+        echo "Building without debug symbols"; \
+        DEBUG_FLAGS=""; \
+    fi && \
+    gcc mac_swap_forward_rte.c $DEBUG_FLAGS -o mac_swap_forward_rte \
         -O2 -march=x86-64 -msse4.1 -mpopcnt \
         $(pkg-config --cflags --libs libdpdk) \
     && rm mac_swap_forward_rte.c
