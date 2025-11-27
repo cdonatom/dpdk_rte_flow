@@ -1,10 +1,24 @@
 FROM registry.redhat.io/openshift4/dpdk-base-rhel9:v4.20
 
+ARG DEBUG=true
+
+USER root
+
+RUN if [ "$DEBUG" = "true" ]; then \
+    microdnf --setopt=tsflags=nodocs update -y && \
+    microdnf --enablerepo='rhel-9-for-x86_64-appstream-debug-rpms' \
+    --setopt=tsflags=nodocs -y install \
+    gdb dpdk-debuginfo glibc-debuginfo numactl-libs-debuginfo libarchive-debuginfo openssl-libs-debuginfo \
+    libacl-debuginfo xz-libs-debuginfo libzstd-debuginfo lz4-libs-debuginfo bzip2-libs-debuginfo \
+    zlib-debuginfo libxml2-debuginfo libattr-debuginfo libibverbs-debuginfo libnl3-debuginfo libgcc-debuginfo && \
+    microdnf -y clean all --enablerepo='*' \
+    ; fi
+
 USER default 
 WORKDIR /opt/app-root/src
 COPY src/mac_swap_forward_rte.c .
 
-RUN gcc mac_swap_forward_rte.c -o mac_swap_forward_rte \
+RUN gcc mac_swap_forward_rte.c -g -o mac_swap_forward_rte \
         -O2 -march=x86-64 -msse4.1 -mpopcnt \
         $(pkg-config --cflags --libs libdpdk) \
     && rm mac_swap_forward_rte.c

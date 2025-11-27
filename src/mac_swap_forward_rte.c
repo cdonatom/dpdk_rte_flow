@@ -79,22 +79,24 @@ setup_rte_flow(uint16_t port_id)
     struct rte_flow_action_queue queue = { .index = RX_QUEUE_ID };
     struct rte_flow_error error;
     struct rte_flow *flow;
-    struct rte_flow_action_port_id port_id_action;
 
     /* Match in RX */
     memset(&attr, 0, sizeof(attr));
     attr.ingress = 1;
 
+    static const uint8_t fd_byte =  0xfd;
+    static const uint8_t full_mask = 0xff;
+
     /* RAW: search for 0xFD in byte 23 */
     memset(&raw_spec, 0, sizeof(raw_spec));
-    raw_spec.pattern  = (const uint8_t*)"fd";
-    raw_spec.length   = strlen((const char*)raw_spec.pattern);     /* 1 byte */
+    raw_spec.pattern  = (const uint8_t*)&fd_byte;
+    raw_spec.length   = 1;     /* 1 byte */
     raw_spec.offset   = 23;    /* Protocol position in IPv4 header */
     raw_spec.relative = 0;     /* start from byte 0*/
     
     memset(&raw_mask, 0, sizeof(raw_spec));
-    raw_mask.pattern = (const uint8_t*)"ff";
-    raw_mask.length = strlen((const char*)raw_mask.pattern);
+    raw_mask.pattern = (const uint8_t*)&full_mask;
+    raw_mask.length = 1;
     raw_mask.relative = 0;
     raw_mask.search = 0;
     raw_mask.offset = 23;   
@@ -105,13 +107,10 @@ setup_rte_flow(uint16_t port_id)
     pattern[0].mask = &raw_mask;
     pattern[1].type = RTE_FLOW_ITEM_TYPE_END;
 
-    memset(&port_id_action, 0, sizeof(port_id_action));
-    port_id_action.id = port_id;
-
     /* Action: send to port_id */
     memset(action, 0, sizeof(action));
-    action[0].type = RTE_FLOW_ACTION_TYPE_PORT_ID;
-    action[0].conf = &port_id_action;
+    action[0].type = RTE_FLOW_ACTION_TYPE_QUEUE;
+    action[0].conf = &queue;
     action[1].type = RTE_FLOW_ACTION_TYPE_END;
 
     /* Create flow */
