@@ -1,7 +1,7 @@
 # Makefile for building DPDK RTE Flow container with podman
 
 # Default values
-IMAGE_NAME ?= dpdk-rte-flow
+IMAGE_NAME ?= dpdk_rte_raw
 VERSION ?= v4.20
 BASE_IMAGE ?= registry.redhat.io/openshift4/dpdk-base-rhel9:$(VERSION)
 DEBUG ?= false
