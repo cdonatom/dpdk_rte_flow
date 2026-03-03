@@ -1,0 +1,129 @@
+# Stage 1: Builder - Install build dependencies and compile DPDK
+FROM fedora:latest AS builder
+
+# Set DPDK version and download URL
+ENV DPDK_VERSION=26.03-rc1
+ENV DPDK_URL=https://github.com/DPDK/dpdk/archive/refs/tags/v26.03-rc1.tar.gz
+
+# Install build dependencies (based on RHEL/Fedora DPDK spec file)
+RUN dnf update -y && \
+    dnf install -y --nodocs \
+    # Build tools
+    gcc \
+    gcc-c++ \
+    meson \
+    ninja-build \
+    pkg-config \
+    python3 \
+    python3-pyelftools \
+    # DPDK build dependencies
+    numactl-devel \
+    libpcap-devel \
+    zlib-devel \
+    openssl-devel \
+    libarchive-devel \
+    rdma-core-devel \
+    # Extraction
+    tar && \
+    dnf clean all
+
+# Download and extract DPDK
+WORKDIR /usr/src
+ADD ${DPDK_URL} dpdk.tar.gz
+RUN tar xzf dpdk.tar.gz && \
+    mv dpdk-${DPDK_VERSION} dpdk && \
+    rm dpdk.tar.gz
+
+# Build DPDK following Fedora RPM spec approach with examples
+WORKDIR /usr/src/dpdk
+
+# Configure, build and install DPDK
+RUN mkdir -p /opt/dpdk && \
+    meson setup build \
+    --prefix=/opt/dpdk \
+    --buildtype=release \
+    --includedir=include/dpdk \
+    --default-library=shared \
+    -Dmachine=generic \
+    -Dexamples=all \
+    -Dtests=false \
+    -Denable_docs=false \
+    -Dplatform=generic && \
+    ninja -C build && \
+    ninja -C build install && \
+    # Strip binaries and libraries aggressively
+    find /opt/dpdk -type f \( -executable -o -name '*.so*' \) -exec strip --strip-all {} \; 2>/dev/null || true && \
+    # Remove static libraries (we only need shared libs for runtime)
+    find /opt/dpdk -name '*.a' -delete
+
+# Stage 2: Runtime - Minimal fedora-minimal with DPDK runtime
+FROM fedora-minimal:latest
+
+# Set DPDK environment variables
+ENV RTE_SDK=/opt/dpdk
+ENV RTE_TARGET=x86_64-native-linux-gcc
+ENV PKG_CONFIG_PATH=/opt/dpdk/lib64/pkgconfig:${PKG_CONFIG_PATH}
+ENV LD_LIBRARY_PATH=/opt/dpdk/lib64:${LD_LIBRARY_PATH}
+ENV PATH=/opt/dpdk/bin:${PATH}
+
+# Install runtime dependencies, build tools, and devel packages for pkg-config
+RUN microdnf install -y --nodocs --setopt=install_weak_deps=0 \
+    # DPDK runtime libraries
+    numactl-libs \
+    libpcap \
+    zlib \
+    openssl-libs \
+    libarchive \
+    rdma-core \
+    # Build tools for compiling DPDK applications
+    gcc \
+    pkg-config \
+    # Development headers needed by pkg-config when building against DPDK
+    numactl-devel \
+    libpcap-devel \
+    zlib-devel \
+    openssl-devel \
+    libarchive-devel \
+    rdma-core-devel \
+    # Python for DPDK utilities (dpdk-devbind.py)
+    python3 \
+    python3-pyelftools \
+    # Utilities
+    pciutils \
+    iproute \
+    findutils \
+    # Capabilities management (for setcap)
+    libcap && \
+    # Cleanup
+    microdnf clean all && \
+    rm -rf /var/cache /tmp/* /var/tmp/*
+
+# Copy compiled DPDK from builder stage
+COPY --from=builder /opt/dpdk /opt/dpdk
+
+# Configure library path and register DPDK libraries
+RUN echo "/opt/dpdk/lib64" > /etc/ld.so.conf.d/dpdk-x86_64.conf && \
+    ldconfig
+
+# Copy DPDK Python utilities to standard location
+RUN find /opt/dpdk -name "dpdk-devbind.py" -exec cp {} /usr/local/bin/ \; || true && \
+    chmod +x /usr/local/bin/dpdk-devbind.py 2>/dev/null || true
+
+# Create default user (UID 1000) and set permissions
+RUN useradd -u 1000 -m -s /bin/bash default && \
+    echo "default:default" | chpasswd && \
+    echo "root:root" | chpasswd && \
+    chown -R default:default /opt/dpdk
+
+# Create application directory with proper structure and permissions
+RUN mkdir -p /opt/app-root/src && \
+    chown -R default:default /opt/app-root && \
+    chmod -R 755 /opt/app-root
+
+WORKDIR /opt/app-root/src
+
+# Switch to default user
+USER default
+
+# Default command
+CMD ["/bin/bash"]
