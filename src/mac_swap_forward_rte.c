@@ -93,13 +93,13 @@ setup_rte_flow(uint16_t port_id)
     raw_spec.length   = 1;     /* 1 byte */
     raw_spec.offset   = 23;    /* Protocol position in IPv4 header */
     raw_spec.relative = 0;     /* start from byte 0*/
-    
+
     memset(&raw_mask, 0, sizeof(raw_spec));
     raw_mask.pattern = (const uint8_t*)&full_mask;
     raw_mask.length = 1;
     raw_mask.relative = 0;
     raw_mask.search = 0;
-    raw_mask.offset = 23;   
+    raw_mask.offset = 23;
 
     memset(pattern, 0, sizeof(pattern));
     pattern[0].type = RTE_FLOW_ITEM_TYPE_RAW;
