@@ -8,7 +8,7 @@ USER root
 
 RUN if [ "$DEBUG" = "true" ]; then \
     microdnf --setopt=tsflags=nodocs update -y && \
-#    microdnf --enablerepo='rhel-9-for-x86_64-appstream-debug-rpms' \
+    microdnf --enablerepo='rhel-9-for-x86_64-appstream-debug-rpms' \
     --setopt=tsflags=nodocs -y install \
     gdb dpdk-debuginfo glibc-debuginfo numactl-libs-debuginfo libarchive-debuginfo openssl-libs-debuginfo \
     libacl-debuginfo xz-libs-debuginfo libzstd-debuginfo lz4-libs-debuginfo bzip2-libs-debuginfo \

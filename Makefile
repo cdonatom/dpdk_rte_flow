@@ -1,11 +1,18 @@
 # Makefile for building DPDK RTE Flow container with podman
 
 # Default values
+BASE_IMAGE_NAME ?= dpdk_base
 IMAGE_NAME ?= dpdk_rte_raw
+DPDK_VERSION ?= 26.03-rc1
 VERSION ?= v4.20
-BASE_IMAGE ?= registry.redhat.io/openshift4/dpdk-base-rhel9:$(VERSION)
+BASE_IMAGE ?= localhost/$(BASE_IMAGE_NAME):$(DPDK_VERSION)
 DEBUG ?= false
 REGISTRY ?= quay.io/cdonato
+
+# Build the DPDK base image (optional, standalone)
+.PHONY: build-base
+build-base:
+	podman build -f Containerfile_dpdk_base -t $(BASE_IMAGE_NAME):$(DPDK_VERSION) .
 
 # Build the container with debug mode (default)
 .PHONY: build
@@ -22,6 +29,16 @@ build-debug:
 build-release:
 	podman build --build-arg DEBUG=false --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(IMAGE_NAME):$(VERSION) .
 
+# Build both base and application images
+.PHONY: build-all
+build-all: build-base build
+
+# Push base image to registry
+.PHONY: push-base
+push-base:
+	podman push $(BASE_IMAGE_NAME):$(DPDK_VERSION) $(REGISTRY)/$(BASE_IMAGE_NAME):$(DPDK_VERSION)
+
+# Push application image to registry
 .PHONY: push
 push:
 	podman push $(IMAGE_NAME):$(VERSION) $(REGISTRY)/$(IMAGE_NAME):$(VERSION)
@@ -30,25 +47,42 @@ push:
 push-debug:
 	podman push $(IMAGE_NAME):$(VERSION)-debug $(REGISTRY)/$(IMAGE_NAME):$(VERSION)-debug
 
-# Clean up the container image
+# Push all images to registry
+.PHONY: push-all
+push-all: push-base push
+
+# Clean up the container images
 .PHONY: clean
 clean:
-	podman rmi $(IMAGE_NAME):$(VERSION) $(IMAGE_NAME):$(VERSION)-debug || true
+	podman rmi $(IMAGE_NAME):$(VERSION) $(IMAGE_NAME):$(VERSION)-debug $(BASE_IMAGE_NAME):$(DPDK_VERSION) || true
 
 # Show help
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build          - Build container with DEBUG=$(DEBUG) (default: true)"
-	@echo "  build-debug    - Build container with debug mode enabled"
-	@echo "  build-release  - Build container without debug mode"
-	@echo "  push           - Push the container image to the registry"
-	@echo "  push-debug     - Push the container image with debug mode to the registry"
-	@echo "  clean          - Remove the container image"
+	@echo "  build-base     - Build the DPDK base image"
+	@echo "  build          - Build application container with DEBUG=$(DEBUG) (builds base first)"
+	@echo "  build-debug    - Build application container with debug mode enabled"
+	@echo "  build-release  - Build application container without debug mode"
+	@echo "  build-all      - Build both base and application images"
+	@echo "  push-base      - Push the base image to the registry"
+	@echo "  push           - Push the application image to the registry"
+	@echo "  push-debug     - Push the application image with debug mode to the registry"
+	@echo "  push-all       - Push all images to the registry"
+	@echo "  clean          - Remove all container images"
 	@echo "  help           - Show this help message"
 	@echo ""
+	@echo "Variables:"
+	@echo "  BASE_IMAGE_NAME - Base image name (default: $(BASE_IMAGE_NAME))"
+	@echo "  IMAGE_NAME      - Application image name (default: $(IMAGE_NAME))"
+	@echo "  DPDK_VERSION    - DPDK version for base image (default: $(DPDK_VERSION))"
+	@echo "  VERSION         - Application version tag (default: $(VERSION))"
+	@echo "  DEBUG           - Enable debug symbols (default: $(DEBUG))"
+	@echo "  REGISTRY        - Container registry (default: $(REGISTRY))"
+	@echo ""
 	@echo "Examples:"
-	@echo "  make build              # Build with default DEBUG=true"
-	@echo "  make build DEBUG=false  # Build with DEBUG=false"
-	@echo "  make build-debug        # Build with debug mode"
-	@echo "  make build-release      # Build without debug mode"
+	@echo "  make build-base         # Build only the DPDK base image"
+	@echo "  make build              # Build base + application with default DEBUG=false"
+	@echo "  make build DEBUG=true   # Build with DEBUG=true"
+	@echo "  make build-all          # Build both base and application"
+	@echo "  make push-all           # Push all images to registry"
