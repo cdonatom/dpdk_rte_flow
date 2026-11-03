@@ -84,22 +84,34 @@ setup_rte_flow(uint16_t port_id)
     memset(&attr, 0, sizeof(attr));
     attr.ingress = 1;
 
-    static const uint8_t fd_byte =  0xfd;
-    static const uint8_t full_mask = 0xff;
+    /* Pattern from env vars, in the ASCII hex-string form expected by
+     * the iavf PMD FDIR parser (each character pair decodes to one
+     * 16-bit word; rte_flow_item_raw.offset is ignored by this path
+     * and the ice PF parses the spec as a packet prefix from offset 0).
+     * Default: match the IPv4 protocol byte 0xfd at byte 23 of the
+     * Ethernet frame via a synthetic 24-byte packet prefix (Ethernet
+     * header + start of IPv4 header), masking everything except the
+     * ethertype and the protocol byte. */
+    const char *env_spec = getenv("RAW_SPEC");
+    const char *env_mask = getenv("RAW_MASK");
+    static const uint8_t default_spec[] = "0000000000000000000000000800450000000000000000fd";
+    static const uint8_t default_mask[] = "000000000000000000000000ffff000000000000000000ff";
 
-    /* RAW: search for 0xFD in byte 23 */
     memset(&raw_spec, 0, sizeof(raw_spec));
-    raw_spec.pattern  = (const uint8_t*)&fd_byte;
-    raw_spec.length   = 1;     /* 1 byte */
-    raw_spec.offset   = 23;    /* Protocol position in IPv4 header */
-    raw_spec.relative = 0;     /* start from byte 0*/
+    raw_spec.pattern  = (const uint8_t *)(env_spec ? env_spec : (const char *)default_spec);
+    raw_spec.length   = strlen((const char *)raw_spec.pattern);
+    raw_spec.offset   = 0;
+    raw_spec.relative = 0;
 
     memset(&raw_mask, 0, sizeof(raw_spec));
-    raw_mask.pattern = (const uint8_t*)&full_mask;
-    raw_mask.length = 1;
+    raw_mask.pattern = (const uint8_t *)(env_mask ? env_mask : (const char *)default_mask);
+    raw_mask.length  = strlen((const char *)raw_mask.pattern);
     raw_mask.relative = 0;
     raw_mask.search = 0;
-    raw_mask.offset = 23;
+    raw_mask.offset = 0;
+
+    printf("RAW spec:  %s\n", (const char *)raw_spec.pattern);
+    printf("RAW mask:  %s\n", (const char *)raw_mask.pattern);
 
     memset(pattern, 0, sizeof(pattern));
     pattern[0].type = RTE_FLOW_ITEM_TYPE_RAW;
